@@ -1,1 +1,66 @@
+# @package _global_
 
+work_dir: ${hydra:runtime.cwd}
+
+# path to folder with data
+data_dir: ${work_dir}/data
+
+# path to language model
+lm_dir: ${work_dir}/language_models/from_scratch
+
+# path to logs
+log_dir: ${work_dir}/logs/
+
+hydra:
+    # output paths for hydra logs
+    run:
+        dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+datamodule:
+  _target_: src.data.TweetDataSet
+  data_path: gs://data-reasearch/data.csv
+  tokenizer_path: cardiffnlp/twitter-xlm-roberta-base-sentiment
+  test_size: 0.2
+  val_size: 0.2
+  batch_size: 64
+  num_workers: 8
+
+model:
+  _target_: src.model.TweetCatModel
+  lm_path: cardiffnlp/twitter-xlm-roberta-base-sentiment
+  learning_rate: 0.0005
+  dropout_clf: 0.2
+  output_dim: 2
+  hidden_dim: 50
+  day_emb_dim: 2
+  month_emb_dim: 2
+  max_epochs: 10
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  # set `1` to train on GPU, `0` to train on CPU only
+  accelerator: "cpu"
+  gradient_clip_val: 1
+  log_every_n_steps: 50
+
+model_checkpoint:
+    _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    save_weights_only: True
+    monitor: "val_acc"
+    mode: "max"
+
+early_stopping:
+    _target_: pytorch_lightning.callbacks.EarlyStopping
+    monitor: "val_acc"
+    min_delta: 0.001
+    patience: 1000
+    mode: "max"
+    verbose: True
+
+lr_monitor:
+    _target_: pytorch_lightning.callbacks.LearningRateMonitor
+    logging_interval: "epoch"
+
+tensorboard:
+    _target_: pytorch_lightning.loggers.TensorBoardLogger
+    save_dir: ${log_dir}/
+    name: "tensorboard"
